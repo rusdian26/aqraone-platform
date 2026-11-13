@@ -177,7 +177,7 @@ export default function UMKMDashboardPage() {
                 <div>
                   <h3 className="font-bold text-[14px] text-amber-900">Toko Anda Sedang Menunggu Verifikasi Admin</h3>
                   <p className="text-[12px] text-amber-700 mt-1 max-w-2xl leading-relaxed">
-                    Pendaftaran toko Anda sedang dalam antrean verifikasi oleh Super Admin. Anda sudah bisa melengkapi profil toko dan menambahkan katalog produk sekarang. Toko dan produk Anda akan langsung tampil di marketplace setelah disetujui.
+                    Pendaftaran toko Anda sedang dalam antrean verifikasi oleh Admin Aqrapana. Anda sudah bisa melengkapi profil toko dan menambahkan katalog produk sekarang. Toko dan produk Anda akan langsung tampil di marketplace setelah disetujui.
                   </p>
                 </div>
               </div>

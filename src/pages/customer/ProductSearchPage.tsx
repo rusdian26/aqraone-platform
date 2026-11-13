@@ -46,7 +46,9 @@ export default function ProductSearchPage() {
   const toggleCat = (cat: string) => setSelectedCats(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]);
 
   // Transform and filter products
-  const formattedProducts = rawProducts.map(p => {
+  const formattedProducts = rawProducts
+    .filter((p) => !p.status || p.status === "AKTIF")
+    .map((p) => {
     const minP = p.product_variants && p.product_variants.length > 0
       ? Math.min(...p.product_variants.map(v => Number(v.harga) || 0))
       : 25000;

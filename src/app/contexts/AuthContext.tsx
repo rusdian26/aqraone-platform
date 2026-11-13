@@ -51,7 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error || !profileData) {
         // Fallback dari user_metadata jika row profiles belum siap
         const fallbackRole = (userMeta?.role as UserRole) || "CUSTOMER";
-        const fallbackName = (userMeta?.nama as string) || (userMeta?.name as string) || userEmail?.split("@")[0] || "Pengguna";
+        let fallbackName = (userMeta?.nama as string) || (userMeta?.name as string) || userEmail?.split("@")[0] || "Pengguna";
+        if (fallbackRole === "ADMIN" || fallbackName === "Super Admin" || userEmail === "admin@aqraone.com") {
+          fallbackName = "Admin Aqrapana";
+        }
         
         const fallbackUser: User = {
           id: userId,
@@ -64,14 +67,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return fallbackRole;
       }
 
-      setProfile(profileData);
+      const displayName = (profileData.nama === "Super Admin" || (profileData.role === "ADMIN" && !profileData.nama))
+        ? "Admin Aqrapana"
+        : profileData.nama;
+      const finalProfile = { ...profileData, nama: displayName };
+      setProfile(finalProfile);
       const appUser: User = {
         id: profileData.id,
-        name: profileData.nama,
+        name: displayName,
         email: profileData.email,
         role: profileData.role,
         phone: profileData.no_hp,
-        profile: profileData,
+        profile: finalProfile,
       };
       setUser(appUser);
       return profileData.role;

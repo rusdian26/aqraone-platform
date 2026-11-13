@@ -91,7 +91,9 @@ export default function HomePage() {
   }, []);
 
   const displayedProducts = dbProducts.length > 0
-    ? dbProducts.map((p) => {
+    ? dbProducts
+        .filter((p) => !p.status || p.status === "AKTIF")
+        .map((p) => {
         const minPrice = p.product_variants && p.product_variants.length > 0
           ? Math.min(...p.product_variants.map((v) => Number(v.harga) || 0))
           : 25000;

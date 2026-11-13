@@ -5,12 +5,13 @@ import Button from "../../components/ui/Button";
 import { StatusBadge } from "../../components/ui/Badge";
 import { Input, Select } from "../../components/ui/Input";
 import { ConfirmModal } from "../../components/ui/Modal";
+import Modal from "../../components/ui/Modal";
 import { IconDashboard, IconAdmin, IconStore, IconShield, IconFolder, IconPackage, IconCreditCard, IconBarChart, IconLogout } from "../../components/ui/Icons";
 import PanelHeader from "../../components/ui/PanelHeader";
 import { useAuth } from "../../app/contexts/AuthContext";
 import { productService, type ProductWithUmkm } from "../../services/product.service";
 import { categoryService } from "../../services/category.service";
-import type { KategoriProduk } from "../../types/database.types";
+import type { KategoriProduk, ProductStatus } from "../../types/database.types";
 import { sanitizeProductImageUrl, getProductFallbackImage } from "../../lib/imageUtils";
 
 const sidebarItems = [
@@ -37,6 +38,8 @@ export default function AdminProductMonitorPage() {
   const [stockFilter, setStockFilter] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [statusLoadingId, setStatusLoadingId] = useState<string | null>(null);
+  const [fkBlockedProduct, setFkBlockedProduct] = useState<ProductWithUmkm | null>(null);
 
   const loadProducts = async () => {
     setLoading(true);
@@ -63,13 +66,36 @@ export default function AdminProductMonitorPage() {
     loadProducts();
   }, [catFilter, search]);
 
+  const handleToggleStatus = async (productId: string, currentStatus: ProductStatus) => {
+    setStatusLoadingId(productId);
+    try {
+      const nextStatus: ProductStatus = currentStatus === "AKTIF" ? "NONAKTIF" : "AKTIF";
+      const { error } = await productService.updateProduct(productId, { status: nextStatus });
+      if (error) {
+        alert("Gagal mengubah status produk: " + error.message);
+      } else {
+        setProducts(prev => prev.map(p => p.id === productId ? { ...p, status: nextStatus } : p));
+      }
+    } catch (err: unknown) {
+      alert("Error: " + ((err as Error).message || "Gagal mengubah status"));
+    } finally {
+      setStatusLoadingId(null);
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteId) return;
     setDeleting(true);
     try {
       const { error } = await productService.deleteProduct(deleteId);
       if (error) {
-        alert("Gagal menghapus produk: " + error.message);
+        if ((error as any).isForeignKeyConstraint) {
+          const blocked = products.find(p => p.id === deleteId) || null;
+          setDeleteId(null);
+          setFkBlockedProduct(blocked);
+        } else {
+          alert("Gagal menghapus produk: " + error.message);
+        }
       } else {
         setProducts(prev => prev.filter(p => p.id !== deleteId));
         setDeleteId(null);
@@ -165,7 +191,20 @@ export default function AdminProductMonitorPage() {
       key: "action",
       header: "Aksi",
       render: (r: ProductWithUmkm) => (
-        <div className="flex gap-2">
+        <div className="flex items-center gap-1.5">
+          <Button
+            size="sm"
+            variant="outline"
+            className={
+              r.status === "AKTIF"
+                ? "text-[#B7791F] border-[#B7791F]/30 hover:bg-[#FFFBEB]"
+                : "text-[#2B8A3E] border-[#2B8A3E]/30 hover:bg-[#EBFBEE]"
+            }
+            disabled={statusLoadingId === r.id}
+            onClick={() => handleToggleStatus(r.id, r.status as ProductStatus)}
+          >
+            {statusLoadingId === r.id ? "..." : r.status === "AKTIF" ? "Nonaktifkan" : "Aktifkan"}
+          </Button>
           <Button size="sm" variant="danger" onClick={() => setDeleteId(r.id)}>
             Hapus
           </Button>
@@ -250,6 +289,49 @@ export default function AdminProductMonitorPage() {
         message="Apakah Admin yakin ingin menghapus produk ini dari marketplace? Produk dan seluruh variannya akan dihapus secara permanen dari Supabase."
         confirmLabel={deleting ? "Menghapus..." : "Ya, Hapus Produk"}
       />
+
+      {fkBlockedProduct && (
+        <Modal
+          open={!!fkBlockedProduct}
+          onClose={() => setFkBlockedProduct(null)}
+          title="Produk Terhubung Transaksi Pembeli"
+          size="md"
+          footer={
+            <div className="flex items-center justify-end gap-2.5">
+              <Button variant="secondary" size="sm" onClick={() => setFkBlockedProduct(null)}>
+                Batal
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={async () => {
+                  if (fkBlockedProduct) {
+                    await handleToggleStatus(fkBlockedProduct.id, "AKTIF");
+                    setFkBlockedProduct(null);
+                  }
+                }}
+              >
+                Nonaktifkan Produk Saja
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-3 text-sm text-[#505050]">
+            <p>
+              Produk <strong className="text-[#1A1714] font-semibold">{fkBlockedProduct.nama_produk}</strong> sudah memiliki catatan transaksi/pesanan pembeli di database Supabase (tabel <code className="bg-[#F0EEE6] px-1.5 py-0.5 rounded text-[12px] font-mono">order_items</code>).
+            </p>
+            <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-xl p-3 text-[13px] text-[#92400E] space-y-1">
+              <p className="font-semibold">💡 Solusi yang direkomendasikan:</p>
+              <p>
+                Klik tombol <strong>"Nonaktifkan Produk Saja"</strong> di bawah. Produk akan langsung disembunyikan dari katalog toko & pembeli tanpa merusak riwayat transaksi.
+              </p>
+            </div>
+            <p className="text-[12px] text-[#8A8780]">
+              *Catatan: Jika Anda sedang testing dan ingin menghapus produk beserta seluruh riwayat pesanannya secara permanen dari Supabase, jalankan file migrasi <code className="font-mono text-[#202020]">supabase/migrations/fix_product_delete_constraint.sql</code> di Supabase SQL Editor.
+            </p>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

@@ -5,11 +5,12 @@ import Table from "../../components/ui/Table";
 import Button from "../../components/ui/Button";
 import PanelHeader from "../../components/ui/PanelHeader";
 import { StatusBadge } from "../../components/ui/Badge";
-import { ConfirmModal } from "../../components/ui/Modal";
+import Modal, { ConfirmModal } from "../../components/ui/Modal";
 import { IconDashboard, IconStore, IconPackage, IconBarChart, IconLogout, IconPlus } from "../../components/ui/Icons";
 import { useAuth } from "../../app/contexts/AuthContext";
 import { umkmService, type UmkmWithCategory } from "../../services/umkm.service";
 import { productService, type ProductDetail } from "../../services/product.service";
+import type { ProductStatus } from "../../types/database.types";
 import { sanitizeProductImageUrl, getProductFallbackImage } from "../../lib/imageUtils";
 
 const sidebarItems = [
@@ -38,6 +39,8 @@ export default function UMKMProductsPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [statusLoadingId, setStatusLoadingId] = useState<string | null>(null);
+  const [fkBlockedProduct, setFkBlockedProduct] = useState<ProductDetail | null>(null);
 
   // Load UMKM data & Products
   const loadData = async () => {
@@ -74,6 +77,24 @@ export default function UMKMProductsPage() {
     loadData();
   }, [user]);
 
+  // Toggle status produk (Aktif / Nonaktif)
+  const handleToggleStatus = async (productId: string, currentStatus: ProductStatus) => {
+    setStatusLoadingId(productId);
+    try {
+      const nextStatus: ProductStatus = currentStatus === "AKTIF" ? "NONAKTIF" : "AKTIF";
+      const { error } = await productService.updateProduct(productId, { status: nextStatus });
+      if (error) {
+        alert("Gagal mengubah status: " + error.message);
+      } else {
+        setProducts(prev => prev.map(p => p.id === productId ? { ...p, status: nextStatus } : p));
+      }
+    } catch (err: unknown) {
+      alert("Error: " + ((err as Error).message || "Gagal"));
+    } finally {
+      setStatusLoadingId(null);
+    }
+  };
+
   // Hapus produk
   const handleDeleteProduct = async () => {
     if (!deleteId) return;
@@ -81,7 +102,13 @@ export default function UMKMProductsPage() {
     try {
       const { error } = await productService.deleteProduct(deleteId);
       if (error) {
-        alert("Gagal menghapus produk: " + error.message);
+        if ((error as any).isForeignKeyConstraint) {
+          const blocked = products.find(p => p.id === deleteId) || null;
+          setDeleteId(null);
+          setFkBlockedProduct(blocked);
+        } else {
+          alert("Gagal menghapus produk: " + error.message);
+        }
       } else {
         setProducts(prev => prev.filter(p => p.id !== deleteId));
         setDeleteId(null);
@@ -173,7 +200,20 @@ export default function UMKMProductsPage() {
       key: "action",
       header: "Aksi",
       render: (r: ProductDetail) => (
-        <div className="flex gap-2">
+        <div className="flex items-center gap-1.5">
+          <Button
+            size="sm"
+            variant="outline"
+            className={
+              r.status === "AKTIF"
+                ? "text-[#B7791F] border-[#B7791F]/30 hover:bg-[#FFFBEB]"
+                : "text-[#2B8A3E] border-[#2B8A3E]/30 hover:bg-[#EBFBEE]"
+            }
+            disabled={statusLoadingId === r.id}
+            onClick={() => handleToggleStatus(r.id, r.status as ProductStatus)}
+          >
+            {statusLoadingId === r.id ? "..." : r.status === "AKTIF" ? "Nonaktifkan" : "Aktifkan"}
+          </Button>
           <Button size="sm" variant="danger" onClick={() => setDeleteId(r.id)}>
             Hapus
           </Button>
@@ -275,6 +315,49 @@ export default function UMKMProductsPage() {
         message="Apakah kamu yakin ingin menghapus produk ini? Semua varian dan data stok terkait di database akan dihapus permanen."
         confirmLabel={actionLoading ? "Menghapus..." : "Ya, Hapus"}
       />
+
+      {fkBlockedProduct && (
+        <Modal
+          open={!!fkBlockedProduct}
+          onClose={() => setFkBlockedProduct(null)}
+          title="Produk Terhubung Riwayat Pesanan"
+          size="md"
+          footer={
+            <div className="flex items-center justify-end gap-2.5">
+              <Button variant="secondary" size="sm" onClick={() => setFkBlockedProduct(null)}>
+                Batal
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={async () => {
+                  if (fkBlockedProduct) {
+                    await handleToggleStatus(fkBlockedProduct.id, "AKTIF");
+                    setFkBlockedProduct(null);
+                  }
+                }}
+              >
+                Nonaktifkan Produk Saja
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-3 text-sm text-[#505050]">
+            <p>
+              Produk <strong className="text-[#1A1714] font-semibold">{fkBlockedProduct.nama_produk}</strong> sudah pernah dibeli dan tercatat pada riwayat transaksi pesanan pembeli di Supabase.
+            </p>
+            <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-xl p-3 text-[13px] text-[#92400E] space-y-1">
+              <p className="font-semibold">💡 Solusi yang direkomendasikan:</p>
+              <p>
+                Pilih <strong>"Nonaktifkan Produk Saja"</strong> agar produk langsung diarsipkan dan tidak dapat dilihat/dipesan lagi oleh pembeli, tanpa merusak laporan dan riwayat pesanan yang sudah ada.
+              </p>
+            </div>
+            <p className="text-[12px] text-[#8A8780]">
+              *Catatan: Jika sedang tahap testing sistem dan ingin menghapus produk beserta pesanan terkait secara permanen, hubungi Admin atau jalankan script migrasi fix constraint di Supabase SQL Editor.
+            </p>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

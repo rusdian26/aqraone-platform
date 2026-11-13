@@ -145,15 +145,26 @@ export const productService = {
     }
   },
 
-  // Hapus produk (PostgreSQL CASCADE akan menghapus varian dan stok otomatis)
-  async deleteProduct(productId: string): Promise<{ error: Error | null }> {
+  // Hapus produk
+  async deleteProduct(productId: string): Promise<{ error: (Error & { isForeignKeyConstraint?: boolean; code?: string }) | null }> {
     try {
       const { error } = await supabase
         .from("products")
         .delete()
         .eq("id", productId);
 
-      if (error) throw error;
+      if (error) {
+        const isFk =
+          error.code === "23503" ||
+          (typeof error.message === "string" &&
+            (error.message.includes("foreign key constraint") ||
+              error.message.includes("order_items_varian_id_fkey")));
+
+        const enhancedErr = new Error(error.message) as Error & { isForeignKeyConstraint?: boolean; code?: string };
+        enhancedErr.isForeignKeyConstraint = isFk;
+        enhancedErr.code = error.code;
+        return { error: enhancedErr };
+      }
       return { error: null };
     } catch (err: unknown) {
       return { error: err as Error };
@@ -177,5 +188,22 @@ export const productService = {
     } catch (err: unknown) {
       return { data: null, error: err as Error };
     }
+  },
+
+  // Toggle status produk (AKTIF <-> NONAKTIF)
+  async toggleProductStatus(
+    productId: string,
+    currentStatus: ProductStatus
+  ): Promise<{ data: Product | null; error: Error | null }> {
+    const nextStatus: ProductStatus = currentStatus === "AKTIF" ? "NONAKTIF" : "AKTIF";
+    return this.updateProduct(productId, { status: nextStatus });
+  },
+
+  // Set status produk
+  async setProductStatus(
+    productId: string,
+    status: ProductStatus
+  ): Promise<{ data: Product | null; error: Error | null }> {
+    return this.updateProduct(productId, { status });
   },
 };

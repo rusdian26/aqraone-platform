@@ -31,7 +31,7 @@ const roleConfig: Record<
     hint: "Masukkan email Admin...",
     email: "admin@aqraone.com",
     pass: "admin123",
-    title: "Super Admin Platform",
+    title: "Admin Aqrapana",
   },
 };
 
@@ -137,7 +137,7 @@ export default function LoginPage() {
           <div className="mb-6 p-3.5 bg-gradient-to-r from-amber-50 to-orange-50/50 border border-amber-200/80 rounded-xl text-xs text-amber-950 flex items-center justify-between gap-3 shadow-xs">
             <div>
               <div className="font-semibold flex items-center gap-1.5">
-                <span>{role === "admin" ? "👑 Akun Super Admin" : role === "umkm" ? "🏪 Akun Mitra UMKM" : "🛍️ Akun Customer"}</span>
+                <span>{role === "admin" ? "👑 Akun Admin Aqrapana" : role === "umkm" ? "🏪 Akun Mitra UMKM" : "🛍️ Akun Customer"}</span>
                 <span className="text-[10px] bg-amber-200/70 text-amber-900 font-bold px-1.5 py-0.5 rounded">Tersedia</span>
               </div>
               <p className="text-[12px] text-amber-800 font-mono mt-0.5">
